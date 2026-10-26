@@ -47,7 +47,8 @@ function usage() {
     '  docs      Print markdown documentation table\n\n' +
     'Options:\n' +
     '  --schema <file>  Schema file (default .env.schema.json)\n' +
-    '  --env <file>     Env file (default .env)\n'
+    '  --env <file>     Env file (default .env)\n' +
+    '  --json           Print validation result as JSON (check only)\n'
   );
 }
 
@@ -83,6 +84,10 @@ function main() {
       process.exit(2);
     }
     const result = validate(schema, env);
+    if (args.json) {
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      process.exit(result.ok ? 0 : 1);
+    }
     if (result.ok) {
       console.log('OK: all environment variables valid');
       process.exit(0);
