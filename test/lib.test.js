@@ -3,8 +3,16 @@ const assert = require('node:assert/strict');
 const { parseEnv, parseSchema, validate, formatExample, formatDocs } = require('../src/lib');
 
 test('parseEnv handles comments, quotes and blanks', () => {
-  const env = parseEnv('FOO=bar\n# comment\nBAZ="qux"\nEMPTY=\n\n  SPACED = value  '); // eslint-disable-line
+  const env = parseEnv('FOO=bar\n# comment\nBAZ="qux"\nEMPTY=\n\n  SPACED = value  ');
   assert.deepEqual(env, { FOO: 'bar', BAZ: 'qux', EMPTY: '', SPACED: 'value' });
+});
+
+test('parseEnv supports export prefix and inline comments', () => {
+  const env = parseEnv('export FOO=bar # comment\nBAZ="qux # not comment"\nLIT=\'a b\' # c\nUNQUOTED=value with spaces # trailing');
+  assert.equal(env.FOO, 'bar');
+  assert.equal(env.BAZ, 'qux # not comment');
+  assert.equal(env.LIT, 'a b');
+  assert.equal(env.UNQUOTED, 'value with spaces');
 });
 
 test('validate reports missing required variable', () => {

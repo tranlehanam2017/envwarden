@@ -8,8 +8,9 @@ function parseEnv(text) {
   const result = Object.create(null);
   const lines = String(text == null ? '' : text).split(/\r?\n/);
   for (const raw of lines) {
-    const line = raw.trim();
+    let line = raw.trim();
     if (!line || line.startsWith('#')) continue;
+    if (line.startsWith('export ')) line = line.slice('export '.length).trim();
     const eq = line.indexOf('=');
     if (eq === -1) continue;
     const key = line.slice(0, eq).trim();
@@ -19,6 +20,9 @@ function parseEnv(text) {
         ((value[0] === '"' && value[value.length - 1] === '"') ||
          (value[0] === "'" && value[value.length - 1] === "'"))) {
       value = value.slice(1, -1);
+    } else {
+      const commentIdx = value.search(/\s+#/);
+      if (commentIdx !== -1) value = value.slice(0, commentIdx).trim();
     }
     result[key] = value;
   }
