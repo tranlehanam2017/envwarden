@@ -40,6 +40,12 @@ Create a `.env.schema.json` file describing your variables:
 Supported types: `string`, `number`, `integer`, `boolean`, `port`, `url`,
 `email`, `path`, and `enum` (requires `values`).
 
+Constraints may be added to any variable:
+
+- `pattern`: a regular expression, as a string or RegExp, that the value must match
+- `min`: inclusive lower bound for numeric values
+- `max`: inclusive upper bound for numeric values
+
 ## Usage
 
 Validate the current environment (reads `.env` if present, otherwise `process.env`):

@@ -15,6 +15,13 @@ test('parseEnv supports export prefix and inline comments', () => {
   assert.equal(env.UNQUOTED, 'value with spaces');
 });
 
+test('parseEnv handles quoted values with trailing inline comments', () => {
+  const env = parseEnv("SINGLE='a b' # trailing\nDOUBLE=\"quoted # value\"\nBARE=plain # note");
+  assert.equal(env.SINGLE, 'a b');
+  assert.equal(env.DOUBLE, 'quoted # value');
+  assert.equal(env.BARE, 'plain');
+});
+
 test('validate reports missing required variable', () => {
   const schema = parseSchema({ vars: { PORT: { type: 'port', required: true } } });
   const result = validate(schema, {});
@@ -65,6 +72,12 @@ test('validate rejects constraint violations', () => {
   const r = validate(schema, { X: 'bbb', Y: '3' });
   assert.equal(r.ok, false);
   assert.equal(r.errors.length, 2);
+});
+
+test('validate RegExp constraints are stateless', () => {
+  const schema = parseSchema({ vars: { X: { type: 'string', pattern: /^a+$/g } } });
+  assert.equal(validate(schema, { X: 'aaa' }).ok, true);
+  assert.equal(validate(schema, { X: 'aaa' }).ok, true);
 });
 
 test('formatExample includes defaults and descriptions', () => {

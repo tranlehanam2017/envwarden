@@ -4,26 +4,38 @@ const ALLOWED_TYPES = new Set([
   'string', 'number', 'integer', 'boolean', 'port', 'url', 'email', 'path', 'enum'
 ]);
 
+function stripInlineComment(value) {
+  if (value.length > 0 && (value[0] === '"' || value[0] === "'")) {
+    const quote = value[0];
+    let i = 1;
+    while (i < value.length) {
+      if (value[i] === '\\' && i + 1 < value.length) {
+        i += 2;
+        continue;
+      }
+      if (value[i] === quote) {
+        return value.slice(1, i);
+      }
+      i += 1;
+    }
+  }
+  const commentIdx = value.search(/\s+#/);
+  if (commentIdx !== -1) return value.slice(0, commentIdx).trim();
+  return value.trim();
+}
+
 function parseEnv(text) {
   const result = Object.create(null);
   const lines = String(text == null ? '' : text).split(/\r?\n/);
   for (const raw of lines) {
     let line = raw.trim();
     if (!line || line.startsWith('#')) continue;
-    if (line.startsWith('export ')) line = line.slice('export '.length).trim();
+    if (/^export\s+/.test(line)) line = line.replace(/^export\s+/, '').trim();
     const eq = line.indexOf('=');
     if (eq === -1) continue;
     const key = line.slice(0, eq).trim();
     if (!key) continue;
-    let value = line.slice(eq + 1).trim();
-    if (value.length >= 2 &&
-        ((value[0] === '"' && value[value.length - 1] === '"') ||
-         (value[0] === "'" && value[value.length - 1] === "'"))) {
-      value = value.slice(1, -1);
-    } else {
-      const commentIdx = value.search(/\s+#/);
-      if (commentIdx !== -1) value = value.slice(0, commentIdx).trim();
-    }
+    const value = stripInlineComment(line.slice(eq + 1).trim());
     result[key] = value;
   }
   return result;
@@ -113,7 +125,12 @@ function checkType(spec, value) {
 
 function checkConstraints(spec, value) {
   if (spec.pattern !== undefined && spec.pattern !== null) {
-    const re = spec.pattern instanceof RegExp ? spec.pattern : new RegExp(spec.pattern);
+    const flags = spec.pattern instanceof RegExp
+      ? spec.pattern.flags.replace(/[gy]/g, '')
+      : '';
+    const re = spec.pattern instanceof RegExp
+      ? new RegExp(spec.pattern.source, flags)
+      : new RegExp(spec.pattern);
     if (!re.test(value)) return 'does not match pattern';
   }
   const numeric = Number(value);
@@ -134,8 +151,9 @@ function validate(schema, env) {
   for (const [name, spec] of Object.entries(schema.vars)) {
     const present = Object.prototype.hasOwnProperty.call(source, name);
     let value = present ? source[name] : undefined;
+    const provided = present && value !== undefined && value !== null;
 
-    if (!present) {
+    if (!provided) {
       if (spec.default !== undefined && spec.default !== null) {
         value = String(spec.default);
       } else if (spec.required) {
