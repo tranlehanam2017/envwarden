@@ -74,6 +74,12 @@ function parseSchema(input) {
     if (spec.max !== undefined && spec.max !== null && typeof spec.max !== 'number') {
       throw new Error(`max must be a number for ${name}`);
     }
+    if (spec.minLength !== undefined && spec.minLength !== null && typeof spec.minLength !== 'number') {
+      throw new Error(`minLength must be a number for ${name}`);
+    }
+    if (spec.maxLength !== undefined && spec.maxLength !== null && typeof spec.maxLength !== 'number') {
+      throw new Error(`maxLength must be a number for ${name}`);
+    }
     normalized[name] = {
       type,
       required: Boolean(spec.required),
@@ -82,7 +88,9 @@ function parseSchema(input) {
       description: spec.description,
       pattern: spec.pattern,
       min: spec.min,
-      max: spec.max
+      max: spec.max,
+      minLength: spec.minLength,
+      maxLength: spec.maxLength
     };
   }
   return { vars: normalized };
@@ -140,6 +148,12 @@ function checkConstraints(spec, value) {
   }
   if (spec.max !== undefined && spec.max !== null && isNumeric) {
     if (numeric > spec.max) return `above maximum ${spec.max}`;
+  }
+  if (spec.minLength !== undefined && spec.minLength !== null) {
+    if (value.length < spec.minLength) return `shorter than minimum length ${spec.minLength}`;
+  }
+  if (spec.maxLength !== undefined && spec.maxLength !== null) {
+    if (value.length > spec.maxLength) return `longer than maximum length ${spec.maxLength}`;
   }
   return null;
 }
@@ -201,6 +215,8 @@ function formatExample(schema) {
     if (spec.pattern) bits.push(`pattern: ${spec.pattern}`);
     if (spec.min !== undefined && spec.min !== null) bits.push(`min: ${spec.min}`);
     if (spec.max !== undefined && spec.max !== null) bits.push(`max: ${spec.max}`);
+    if (spec.minLength !== undefined && spec.minLength !== null) bits.push(`minLength: ${spec.minLength}`);
+    if (spec.maxLength !== undefined && spec.maxLength !== null) bits.push(`maxLength: ${spec.maxLength}`);
     lines.push(`# ${name} (${bits.join(', ')})${spec.description ? ' - ' + spec.description : ''}`);
     const def = (spec.default !== undefined && spec.default !== null) ? String(spec.default) : '';
     lines.push(`${name}=${def}`);
@@ -218,6 +234,8 @@ function formatDocs(schema) {
     if (spec.pattern) constraints.push(`pattern:${spec.pattern}`);
     if (spec.min !== undefined && spec.min !== null) constraints.push(`min:${spec.min}`);
     if (spec.max !== undefined && spec.max !== null) constraints.push(`max:${spec.max}`);
+    if (spec.minLength !== undefined && spec.minLength !== null) constraints.push(`minLength:${spec.minLength}`);
+    if (spec.maxLength !== undefined && spec.maxLength !== null) constraints.push(`maxLength:${spec.maxLength}`);
     rows.push(
       `| ${name} | ${spec.type} | ${spec.required ? 'yes' : 'no'} | ` +
       `${spec.default !== undefined && spec.default !== null ? spec.default : ''} | ${constraints.join(' ')} | ${spec.description || ''} |`
