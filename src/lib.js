@@ -51,12 +51,26 @@ function parseSchema(input) {
         throw new Error(`enum ${name} requires non-empty values`);
       }
     }
+    if (spec.pattern !== undefined && spec.pattern !== null) {
+      if (typeof spec.pattern !== 'string' && !(spec.pattern instanceof RegExp)) {
+        throw new Error(`pattern must be a string or RegExp for ${name}`);
+      }
+    }
+    if (spec.min !== undefined && spec.min !== null && typeof spec.min !== 'number') {
+      throw new Error(`min must be a number for ${name}`);
+    }
+    if (spec.max !== undefined && spec.max !== null && typeof spec.max !== 'number') {
+      throw new Error(`max must be a number for ${name}`);
+    }
     normalized[name] = {
       type,
       required: Boolean(spec.required),
       default: spec.default,
       values: spec.values,
-      description: spec.description
+      description: spec.description,
+      pattern: spec.pattern,
+      min: spec.min,
+      max: spec.max
     };
   }
   return { vars: normalized };
@@ -97,6 +111,22 @@ function checkType(spec, value) {
   }
 }
 
+function checkConstraints(spec, value) {
+  if (spec.pattern !== undefined && spec.pattern !== null) {
+    const re = spec.pattern instanceof RegExp ? spec.pattern : new RegExp(spec.pattern);
+    if (!re.test(value)) return 'does not match pattern';
+  }
+  const numeric = Number(value);
+  const isNumeric = !isNaN(numeric) && value !== '';
+  if (spec.min !== undefined && spec.min !== null && isNumeric) {
+    if (numeric < spec.min) return `below minimum ${spec.min}`;
+  }
+  if (spec.max !== undefined && spec.max !== null && isNumeric) {
+    if (numeric > spec.max) return `above maximum ${spec.max}`;
+  }
+  return null;
+}
+
 function validate(schema, env) {
   const errors = [];
   const resolved = Object.create(null);
@@ -124,9 +154,14 @@ function validate(schema, env) {
       value = String(spec.default);
     }
 
-    const reason = checkType(spec, value);
-    if (reason) {
-      errors.push({ name, reason });
+    const typeReason = checkType(spec, value);
+    if (typeReason) {
+      errors.push({ name, reason: typeReason });
+      continue;
+    }
+    const constraintReason = checkConstraints(spec, value);
+    if (constraintReason) {
+      errors.push({ name, reason: constraintReason });
       continue;
     }
     resolved[name] = value;
@@ -145,6 +180,9 @@ function formatExample(schema) {
     if (spec.type === 'enum') {
       bits.push(`one of: ${spec.values.join('|')}`);
     }
+    if (spec.pattern) bits.push(`pattern: ${spec.pattern}`);
+    if (spec.min !== undefined && spec.min !== null) bits.push(`min: ${spec.min}`);
+    if (spec.max !== undefined && spec.max !== null) bits.push(`max: ${spec.max}`);
     lines.push(`# ${name} (${bits.join(', ')})${spec.description ? ' - ' + spec.description : ''}`);
     const def = (spec.default !== undefined && spec.default !== null) ? String(spec.default) : '';
     lines.push(`${name}=${def}`);
@@ -154,13 +192,17 @@ function formatExample(schema) {
 
 function formatDocs(schema) {
   const rows = [
-    '| Variable | Type | Required | Default | Description |',
-    '|---|---|---|---|---|'
+    '| Variable | Type | Required | Default | Constraints | Description |',
+    '|---|---|---|---|---|---|'
   ];
   for (const [name, spec] of Object.entries(schema.vars)) {
+    const constraints = [];
+    if (spec.pattern) constraints.push(`pattern:${spec.pattern}`);
+    if (spec.min !== undefined && spec.min !== null) constraints.push(`min:${spec.min}`);
+    if (spec.max !== undefined && spec.max !== null) constraints.push(`max:${spec.max}`);
     rows.push(
       `| ${name} | ${spec.type} | ${spec.required ? 'yes' : 'no'} | ` +
-      `${spec.default !== undefined && spec.default !== null ? spec.default : ''} | ${spec.description || ''} |`
+      `${spec.default !== undefined && spec.default !== null ? spec.default : ''} | ${constraints.join(' ')} | ${spec.description || ''} |`
     );
   }
   return rows.join('\n') + '\n';

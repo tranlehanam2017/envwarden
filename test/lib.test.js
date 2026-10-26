@@ -57,6 +57,14 @@ test('parseSchema rejects bad input', () => {
   assert.throws(() => parseSchema({}), /vars/);
   assert.throws(() => parseSchema({ vars: { X: { type: 'foo' } } }), /unknown type/);
   assert.throws(() => parseSchema({ vars: { X: { type: 'enum', values: [] } } }), /enum/);
+  assert.throws(() => parseSchema({ vars: { X: { type: 'string', min: 'x' } } }), /min must be/);
+});
+
+test('validate rejects constraint violations', () => {
+  const schema = parseSchema({ vars: { X: { type: 'string', pattern: '^a+$' }, Y: { type: 'number', min: 5, max: 10 } } });
+  const r = validate(schema, { X: 'bbb', Y: '3' });
+  assert.equal(r.ok, false);
+  assert.equal(r.errors.length, 2);
 });
 
 test('formatExample includes defaults and descriptions', () => {
