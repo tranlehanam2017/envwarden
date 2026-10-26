@@ -1,0 +1,8 @@
+{
+  "vars": {
+    "DATABASE_URL": { "type": "url", "required": true, "description": "PostgreSQL connection string" },
+    "PORT": { "type": "port", "default": 3000 },
+    "NODE_ENV": { "type": "enum", "values": ["development", "production", "test"], "default": "development" },
+    "DEBUG": { "type": "boolean", "default": false }
+  }
+}
