@@ -5,7 +5,7 @@ const ALLOWED_TYPES = new Set([
 ]);
 
 function unescapeQuoted(value) {
-  return value.replace(/\\(n|r|t|\\|'|")/g, (_, c) => {
+  return value.replace(/\\(n|r|t|\\|'|\")/g, (_, c) => {
     switch (c) {
       case 'n': return '\n';
       case 'r': return '\r';
@@ -86,11 +86,21 @@ function parseSchema(input) {
     if (spec.max !== undefined && spec.max !== null && typeof spec.max !== 'number') {
       throw new Error(`max must be a number for ${name}`);
     }
-    if (spec.minLength !== undefined && spec.minLength !== null && typeof spec.minLength !== 'number') {
-      throw new Error(`minLength must be a number for ${name}`);
+    if (spec.minLength !== undefined && spec.minLength !== null) {
+      if (typeof spec.minLength !== 'number') {
+        throw new Error(`minLength must be a number for ${name}`);
+      }
+      if (!Number.isInteger(spec.minLength) || spec.minLength < 0) {
+        throw new Error(`minLength must be a non-negative integer for ${name}`);
+      }
     }
-    if (spec.maxLength !== undefined && spec.maxLength !== null && typeof spec.maxLength !== 'number') {
-      throw new Error(`maxLength must be a number for ${name}`);
+    if (spec.maxLength !== undefined && spec.maxLength !== null) {
+      if (typeof spec.maxLength !== 'number') {
+        throw new Error(`maxLength must be a number for ${name}`);
+      }
+      if (!Number.isInteger(spec.maxLength) || spec.maxLength < 0) {
+        throw new Error(`maxLength must be a non-negative integer for ${name}`);
+      }
     }
     normalized[name] = {
       type,
