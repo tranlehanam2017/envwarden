@@ -4,6 +4,17 @@ const ALLOWED_TYPES = new Set([
   'string', 'number', 'integer', 'boolean', 'port', 'url', 'email', 'path', 'enum'
 ]);
 
+function unescapeQuoted(value) {
+  return value.replace(/\\(n|r|t|\\|'|")/g, (_, c) => {
+    switch (c) {
+      case 'n': return '\n';
+      case 'r': return '\r';
+      case 't': return '\t';
+      default: return c;
+    }
+  });
+}
+
 function stripInlineComment(value) {
   if (value.length > 0 && (value[0] === '"' || value[0] === "'")) {
     const quote = value[0];
@@ -14,7 +25,8 @@ function stripInlineComment(value) {
         continue;
       }
       if (value[i] === quote) {
-        return value.slice(1, i);
+        const raw = value.slice(1, i);
+        return quote === '"' ? unescapeQuoted(raw) : raw;
       }
       i += 1;
     }
