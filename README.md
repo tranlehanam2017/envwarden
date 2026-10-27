@@ -45,6 +45,9 @@ Constraints may be added to any variable:
 - `pattern`: a regular expression, as a string or RegExp, that the value must match
 - `min`: inclusive lower bound for numeric values
 - `max`: inclusive upper bound for numeric values
+- `minLength`: inclusive minimum length for string values
+- `maxLength`: inclusive maximum length for string values
+- `trim`: when true, trim surrounding whitespace before validation
 
 ## Usage
 

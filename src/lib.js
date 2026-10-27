@@ -102,6 +102,9 @@ function parseSchema(input) {
         throw new Error(`maxLength must be a non-negative integer for ${name}`);
       }
     }
+    if (spec.trim !== undefined && spec.trim !== null && typeof spec.trim !== 'boolean') {
+      throw new Error(`trim must be a boolean for ${name}`);
+    }
     normalized[name] = {
       type,
       required: Boolean(spec.required),
@@ -112,7 +115,8 @@ function parseSchema(input) {
       min: spec.min,
       max: spec.max,
       minLength: spec.minLength,
-      maxLength: spec.maxLength
+      maxLength: spec.maxLength,
+      trim: Boolean(spec.trim)
     };
   }
   return { vars: normalized };
@@ -208,6 +212,10 @@ function validate(schema, env) {
       value = String(spec.default);
     }
 
+    if (spec.trim && typeof value === 'string') {
+      value = value.trim();
+    }
+
     const typeReason = checkType(spec, value);
     if (typeReason) {
       errors.push({ name, reason: typeReason });
@@ -239,6 +247,7 @@ function formatExample(schema) {
     if (spec.max !== undefined && spec.max !== null) bits.push(`max: ${spec.max}`);
     if (spec.minLength !== undefined && spec.minLength !== null) bits.push(`minLength: ${spec.minLength}`);
     if (spec.maxLength !== undefined && spec.maxLength !== null) bits.push(`maxLength: ${spec.maxLength}`);
+    if (spec.trim) bits.push('trim');
     lines.push(`# ${name} (${bits.join(', ')})${spec.description ? ' - ' + spec.description : ''}`);
     const def = (spec.default !== undefined && spec.default !== null) ? String(spec.default) : '';
     lines.push(`${name}=${def}`);
@@ -258,6 +267,7 @@ function formatDocs(schema) {
     if (spec.max !== undefined && spec.max !== null) constraints.push(`max:${spec.max}`);
     if (spec.minLength !== undefined && spec.minLength !== null) constraints.push(`minLength:${spec.minLength}`);
     if (spec.maxLength !== undefined && spec.maxLength !== null) constraints.push(`maxLength:${spec.maxLength}`);
+    if (spec.trim) constraints.push('trim');
     rows.push(
       `| ${name} | ${spec.type} | ${spec.required ? 'yes' : 'no'} | ` +
       `${spec.default !== undefined && spec.default !== null ? spec.default : ''} | ${constraints.join(' ')} | ${spec.description || ''} |`
