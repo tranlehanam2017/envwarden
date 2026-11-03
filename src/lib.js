@@ -79,12 +79,30 @@ function parseSchema(input) {
       if (typeof spec.pattern !== 'string' && !(spec.pattern instanceof RegExp)) {
         throw new Error(`pattern must be a string or RegExp for ${name}`);
       }
+      try {
+        if (typeof spec.pattern === 'string') {
+          new RegExp(spec.pattern);
+        } else {
+          new RegExp(spec.pattern.source, spec.pattern.flags.replace(/[gy]/g, ''));
+        }
+      } catch (e) {
+        throw new Error(`invalid pattern for ${name}`);
+      }
     }
     if (spec.min !== undefined && spec.min !== null && typeof spec.min !== 'number') {
       throw new Error(`min must be a number for ${name}`);
     }
+    if (spec.min !== undefined && spec.min !== null && typeof spec.min === 'number' && !Number.isFinite(spec.min)) {
+      throw new Error(`min must be a finite number for ${name}`);
+    }
     if (spec.max !== undefined && spec.max !== null && typeof spec.max !== 'number') {
       throw new Error(`max must be a number for ${name}`);
+    }
+    if (spec.max !== undefined && spec.max !== null && typeof spec.max === 'number' && !Number.isFinite(spec.max)) {
+      throw new Error(`max must be a finite number for ${name}`);
+    }
+    if (spec.min !== undefined && spec.min !== null && spec.max !== undefined && spec.max !== null && spec.min > spec.max) {
+      throw new Error(`min must not exceed max for ${name}`);
     }
     if (spec.minLength !== undefined && spec.minLength !== null) {
       if (typeof spec.minLength !== 'number') {
@@ -101,6 +119,9 @@ function parseSchema(input) {
       if (!Number.isInteger(spec.maxLength) || spec.maxLength < 0) {
         throw new Error(`maxLength must be a non-negative integer for ${name}`);
       }
+    }
+    if (spec.minLength !== undefined && spec.minLength !== null && spec.maxLength !== undefined && spec.maxLength !== null && spec.minLength > spec.maxLength) {
+      throw new Error(`minLength must not exceed maxLength for ${name}`);
     }
     if (spec.trim !== undefined && spec.trim !== null && typeof spec.trim !== 'boolean') {
       throw new Error(`trim must be a boolean for ${name}`);
@@ -128,10 +149,11 @@ function checkType(spec, value) {
     case 'path':
       return null;
     case 'number':
-      if (value === '' || isNaN(Number(value))) return 'not a number';
+      if (value === '' || !Number.isFinite(Number(value))) return 'not a number';
       return null;
     case 'integer':
       if (!/^-?\d+$/.test(value)) return 'not an integer';
+      if (!Number.isFinite(Number(value))) return 'not an integer';
       return null;
     case 'boolean':
       if (!/^(true|false|1|0|yes|no)$/i.test(value)) return 'not a boolean';
@@ -150,7 +172,7 @@ function checkType(spec, value) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'not an email';
       return null;
     case 'enum':
-      if (!spec.values.includes(value)) return `not one of ${spec.values.join(', ')}`;
+      if (!spec.values.map((v) => String(v)).includes(String(value))) return `not one of ${spec.values.join(', ')}`;
       return null;
     default:
       return null;
@@ -168,7 +190,7 @@ function checkConstraints(spec, value) {
     if (!re.test(value)) return 'does not match pattern';
   }
   const numeric = Number(value);
-  const isNumeric = !isNaN(numeric) && value !== '';
+  const isNumeric = value !== '' && Number.isFinite(numeric);
   if (spec.min !== undefined && spec.min !== null && isNumeric) {
     if (numeric < spec.min) return `below minimum ${spec.min}`;
   }
@@ -200,6 +222,7 @@ function validate(schema, env) {
     if (!provided) {
       if (spec.default !== undefined && spec.default !== null) {
         value = String(spec.default);
+        if (spec.trim && typeof value === 'string') value = value.trim();
       } else if (spec.required) {
         errors.push({ name, reason: 'missing' });
         continue;
@@ -214,6 +237,7 @@ function validate(schema, env) {
     }
     if (value === '' && spec.default !== undefined && spec.default !== null && spec.required) {
       value = String(spec.default);
+      if (spec.trim && typeof value === 'string') value = value.trim();
     }
 
     const typeReason = checkType(spec, value);
