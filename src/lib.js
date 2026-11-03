@@ -193,6 +193,10 @@ function validate(schema, env) {
     let value = present ? source[name] : undefined;
     const provided = present && value !== undefined && value !== null;
 
+    if (spec.trim && typeof value === 'string') {
+      value = value.trim();
+    }
+
     if (!provided) {
       if (spec.default !== undefined && spec.default !== null) {
         value = String(spec.default);
@@ -210,10 +214,6 @@ function validate(schema, env) {
     }
     if (value === '' && spec.default !== undefined && spec.default !== null && spec.required) {
       value = String(spec.default);
-    }
-
-    if (spec.trim && typeof value === 'string') {
-      value = value.trim();
     }
 
     const typeReason = checkType(spec, value);
