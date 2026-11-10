@@ -91,3 +91,10 @@ test('formatDocs emits markdown table', () => {
   const schema = parseSchema({ vars: { PORT: { type: 'port', default: 3000 } } });
   assert.match(formatDocs(schema), /\| PORT \|/);
 });
+
+test('parseSchema rejects invalid defaults', () => {
+  assert.throws(() => parseSchema({ vars: { X: { type: 'number', default: 'abc' } } }), /invalid default/);
+  assert.throws(() => parseSchema({ vars: { X: { type: 'port', default: 70000 } } }), /invalid default/);
+  assert.throws(() => parseSchema({ vars: { X: { type: 'enum', values: ['a'], default: 'b' } } }), /invalid default/);
+  assert.throws(() => parseSchema({ vars: { X: { type: 'string', minLength: 3, default: 'ab' } } }), /invalid default/);
+});

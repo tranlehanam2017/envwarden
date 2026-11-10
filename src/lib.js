@@ -126,6 +126,38 @@ function parseSchema(input) {
     if (spec.trim !== undefined && spec.trim !== null && typeof spec.trim !== 'boolean') {
       throw new Error(`trim must be a boolean for ${name}`);
     }
+    if (spec.default !== undefined && spec.default !== null) {
+      if (
+        typeof spec.default !== 'string' &&
+        typeof spec.default !== 'number' &&
+        typeof spec.default !== 'boolean'
+      ) {
+        throw new Error(`default must be a string, number, or boolean for ${name}`);
+      }
+      if (typeof spec.default === 'number' && !Number.isFinite(spec.default)) {
+        throw new Error(`default must be a finite number for ${name}`);
+      }
+      let defaultString = String(spec.default);
+      if (spec.trim) defaultString = defaultString.trim();
+      const defaultSpec = {
+        type,
+        values: spec.values,
+        pattern: spec.pattern,
+        min: spec.min,
+        max: spec.max,
+        minLength: spec.minLength,
+        maxLength: spec.maxLength,
+        trim: spec.trim
+      };
+      const defaultTypeReason = checkType(defaultSpec, defaultString);
+      if (defaultTypeReason) {
+        throw new Error(`invalid default for ${name}: ${defaultTypeReason}`);
+      }
+      const defaultConstraintReason = checkConstraints(defaultSpec, defaultString);
+      if (defaultConstraintReason) {
+        throw new Error(`invalid default for ${name}: ${defaultConstraintReason}`);
+      }
+    }
     normalized[name] = {
       type,
       required: Boolean(spec.required),
