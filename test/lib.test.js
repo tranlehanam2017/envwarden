@@ -98,3 +98,17 @@ test('parseSchema rejects invalid defaults', () => {
   assert.throws(() => parseSchema({ vars: { X: { type: 'enum', values: ['a'], default: 'b' } } }), /invalid default/);
   assert.throws(() => parseSchema({ vars: { X: { type: 'string', minLength: 3, default: 'ab' } } }), /invalid default/);
 });
+
+test('parseEnv strips a leading BOM', () => {
+  assert.deepEqual(parseEnv('\uFEFFFOO=bar\nBAZ="qux"'), { FOO: 'bar', BAZ: 'qux' });
+});
+
+test('formatExample trims trimmed defaults', () => {
+  const schema = parseSchema({ vars: { X: { type: 'string', trim: true, default: '  hi  ' } } });
+  assert.match(formatExample(schema), /X=hi\n/);
+});
+
+test('formatDocs trims trimmed defaults', () => {
+  const schema = parseSchema({ vars: { X: { type: 'string', trim: true, default: '  hi  ' } } });
+  assert.match(formatDocs(schema), /\| X \| string \| no \| hi \|/);
+});

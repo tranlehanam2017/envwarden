@@ -9,6 +9,11 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--')) {
+      const equals = a.indexOf('=');
+      if (equals !== -1) {
+        out[a.slice(2, equals)] = a.slice(equals + 1);
+        continue;
+      }
       const key = a.slice(2);
       const next = argv[i + 1];
       if (next && !next.startsWith('--')) {
@@ -25,7 +30,7 @@ function parseArgs(argv) {
 }
 
 function readSchema(path) {
-  const raw = fs.readFileSync(path, 'utf8');
+  const raw = fs.readFileSync(path, 'utf8').replace(/^\uFEFF/, '');
   return parseSchema(JSON.parse(raw));
 }
 

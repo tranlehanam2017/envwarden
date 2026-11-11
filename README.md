@@ -63,6 +63,8 @@ Validate against explicit files:
 node src/cli.js check --schema config/env.schema.json --env .env.local
 ```
 
+Options may also be written as `--key=value`.
+
 Generate an example file:
 
 ```sh

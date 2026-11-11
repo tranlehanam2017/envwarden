@@ -38,7 +38,8 @@ function stripInlineComment(value) {
 
 function parseEnv(text) {
   const result = Object.create(null);
-  const lines = String(text == null ? '' : text).split(/\r?\n/);
+  const content = String(text == null ? '' : text).replace(/^\uFEFF/, '');
+  const lines = content.split(/\r?\n/);
   for (const raw of lines) {
     let line = raw.trim();
     if (!line || line.startsWith('#')) continue;
@@ -61,7 +62,7 @@ function parseSchema(input) {
   if (!vars || typeof vars !== 'object' || Array.isArray(vars)) {
     throw new Error('schema.vars must be an object');
   }
-  const normalized = {};
+  const normalized = Object.create(null);
   for (const [name, spec] of Object.entries(vars)) {
     if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
       throw new Error(`invalid spec for ${name}`);
@@ -293,7 +294,8 @@ function formatExample(schema) {
     const bits = [spec.type || 'string'];
     if (spec.required) bits.push('required');
     if (spec.default !== undefined && spec.default !== null) {
-      bits.push(`default: ${spec.default}`);
+      const shownDefault = spec.trim ? String(spec.default).trim() : spec.default;
+      bits.push(`default: ${shownDefault}`);
     }
     if (spec.type === 'enum') {
       bits.push(`one of: ${spec.values.join('|')}`);
@@ -305,7 +307,9 @@ function formatExample(schema) {
     if (spec.maxLength !== undefined && spec.maxLength !== null) bits.push(`maxLength: ${spec.maxLength}`);
     if (spec.trim) bits.push('trim');
     lines.push(`# ${name} (${bits.join(', ')})${spec.description ? ' - ' + spec.description : ''}`);
-    const def = (spec.default !== undefined && spec.default !== null) ? String(spec.default) : '';
+    const def = (spec.default !== undefined && spec.default !== null)
+      ? (spec.trim ? String(spec.default).trim() : String(spec.default))
+      : '';
     lines.push(`${name}=${def}`);
   }
   return lines.join('\n') + '\n';
@@ -324,9 +328,12 @@ function formatDocs(schema) {
     if (spec.minLength !== undefined && spec.minLength !== null) constraints.push(`minLength:${spec.minLength}`);
     if (spec.maxLength !== undefined && spec.maxLength !== null) constraints.push(`maxLength:${spec.maxLength}`);
     if (spec.trim) constraints.push('trim');
+    const defaultDisplay = (spec.default !== undefined && spec.default !== null)
+      ? (spec.trim ? String(spec.default).trim() : spec.default)
+      : '';
     rows.push(
       `| ${name} | ${spec.type} | ${spec.required ? 'yes' : 'no'} | ` +
-      `${spec.default !== undefined && spec.default !== null ? spec.default : ''} | ${constraints.join(' ')} | ${spec.description || ''} |`
+      `${defaultDisplay} | ${constraints.join(' ')} | ${spec.description || ''} |`
     );
   }
   return rows.join('\n') + '\n';
