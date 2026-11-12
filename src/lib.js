@@ -142,7 +142,7 @@ function parseSchema(input) {
       if (spec.trim) defaultString = defaultString.trim();
       const defaultSpec = {
         type,
-        values: spec.values,
+        values: Array.isArray(spec.values) ? spec.values.slice() : spec.values,
         pattern: spec.pattern,
         min: spec.min,
         max: spec.max,
@@ -163,7 +163,7 @@ function parseSchema(input) {
       type,
       required: Boolean(spec.required),
       default: spec.default,
-      values: spec.values,
+      values: Array.isArray(spec.values) ? spec.values.slice() : spec.values,
       description: spec.description,
       pattern: spec.pattern,
       min: spec.min,
@@ -182,7 +182,7 @@ function checkType(spec, value) {
     case 'path':
       return null;
     case 'number':
-      if (value === '' || !Number.isFinite(Number(value))) return 'not a number';
+      if (value === '' || value.trim() === '' || !Number.isFinite(Number(value))) return 'not a number';
       return null;
     case 'integer':
       if (!/^-?\d+$/.test(value)) return 'not an integer';
@@ -264,7 +264,7 @@ function validate(schema, env) {
       }
     }
 
-    if (value === '' && spec.required && spec.default === undefined) {
+    if (value === '' && spec.required && (spec.default === undefined || spec.default === null)) {
       errors.push({ name, reason: 'missing' });
       continue;
     }
