@@ -34,12 +34,17 @@ function readSchema(path) {
   return parseSchema(JSON.parse(raw));
 }
 
+function hasOption(args, key) {
+  return Object.prototype.hasOwnProperty.call(args, key);
+}
+
 function loadEnv(args) {
-  const envPath = args.env || '.env';
+  const specified = hasOption(args, 'env');
+  const envPath = specified ? args.env : '.env';
   if (fs.existsSync(envPath)) {
     return parseEnv(fs.readFileSync(envPath, 'utf8'));
   }
-  if (!args.env) return { ...process.env };
+  if (!specified) return { ...process.env };
   throw new Error(`env file not found: ${envPath}`);
 }
 
@@ -60,7 +65,7 @@ function usage() {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
-  const schemaPath = args.schema || '.env.schema.json';
+  const schemaPath = hasOption(args, 'schema') ? args.schema : '.env.schema.json';
   if (!cmd || cmd === 'help' || args.help) {
     usage();
     process.exit(0);

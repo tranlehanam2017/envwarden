@@ -8,6 +8,19 @@ function isPlainObject(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
+function safeSet(obj, key, value) {
+  if (key === '__proto__') {
+    Object.defineProperty(obj, key, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  } else {
+    obj[key] = value;
+  }
+}
+
 function toStr(v) {
   if (typeof v === 'string') return v;
   if (v === null) return 'null';
@@ -77,10 +90,23 @@ function validateOne(def, rawValue) {
       ok = false;
   }
 
-  if (ok && def.pattern instanceof RegExp) {
-    const re = def.pattern;
-    re.lastIndex = 0;
-    if (!re.test(value)) ok = false;
+  if (ok && def.pattern !== undefined) {
+    let re = null;
+    if (def.pattern instanceof RegExp) {
+      re = def.pattern;
+    } else if (typeof def.pattern === 'string') {
+      try {
+        re = new RegExp(def.pattern);
+      } catch (e) {
+        ok = false;
+      }
+    } else {
+      ok = false;
+    }
+    if (re) {
+      re.lastIndex = 0;
+      if (!re.test(value)) ok = false;
+    }
   }
 
   if (ok && (def.min !== undefined || def.max !== undefined)) {
@@ -108,7 +134,8 @@ function parseEnv(input) {
   for (const rawLine of text.split(/\r?\n/)) {
     let line = rawLine.trim();
     if (!line || line.charAt(0) === '#') continue;
-    if (line.startsWith('export ')) line = line.slice(7).trim();
+    const exportMatch = line.match(/^export\s+/);
+    if (exportMatch) line = line.slice(exportMatch[0].length).trim();
     const eq = line.indexOf('=');
     if (eq === -1) continue;
     const key = line.slice(0, eq).trim();
@@ -137,7 +164,7 @@ function parseEnv(input) {
       if (idx !== -1) v = v.slice(0, idx);
       value = v.trimEnd();
     }
-    result[key] = value;
+    safeSet(result, key, value);
   }
   return result;
 }
@@ -221,7 +248,7 @@ function parseSchema(input) {
       norm.default = r.value;
     }
 
-    vars[name] = norm;
+    safeSet(vars, name, norm);
   }
 
   return { vars };
@@ -230,7 +257,7 @@ function parseSchema(input) {
 function validate(schema, env) {
   const vars = (schema && isPlainObject(schema.vars)) ? schema.vars : {};
   let source = env;
-  if (!source || typeof source !== 'object' || Array.isArray(source)) source = {};
+  if (!isPlainObject(source)) source = {};
 
   const errors = [];
   const resolved = {};
@@ -239,14 +266,14 @@ function validate(schema, env) {
     const raw = has ? source[name] : undefined;
     if (raw === undefined) {
       if (def.default !== undefined) {
-        resolved[name] = def.default;
+        safeSet(resolved, name, def.default);
         continue;
       }
       if (def.required) errors.push({ name, reason: 'missing' });
       continue;
     }
     const r = validateOne(def, raw);
-    if (r.ok) resolved[name] = r.value;
+    if (r.ok) safeSet(resolved, name, r.value);
     else errors.push({ name, reason: r.reason || 'invalid' });
   }
   return { ok: errors.length === 0, errors, resolved };
