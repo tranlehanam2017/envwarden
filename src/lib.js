@@ -1,135 +1,277 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { parseEnv, parseSchema, validate, formatExample, formatDocs } = require('../src/lib');
+'use strict';
 
-test('parseEnv handles comments, quotes and blanks', () => {
-  const env = parseEnv('FOO=bar\n# comment\nBAZ="qux"\nEMPTY=\n\n  SPACED = value  ');
-  assert.deepEqual(env, { FOO: 'bar', BAZ: 'qux', EMPTY: '', SPACED: 'value' });
-});
+const TYPES = new Set([
+  'string', 'number', 'integer', 'boolean', 'port', 'url', 'email', 'path', 'enum'
+]);
 
-test('parseEnv supports export prefix and inline comments', () => {
-  const env = parseEnv('export FOO=bar # comment\nBAZ="qux # not comment"\nLIT=\'a b\' # c\nUNQUOTED=value with spaces # trailing');
-  assert.equal(env.FOO, 'bar');
-  assert.equal(env.BAZ, 'qux # not comment');
-  assert.equal(env.LIT, 'a b');
-  assert.equal(env.UNQUOTED, 'value with spaces');
-});
+function isPlainObject(v) {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
 
-test('parseEnv handles quoted values with trailing inline comments', () => {
-  const env = parseEnv("SINGLE='a b' # trailing\nDOUBLE=\"quoted # value\"\nBARE=plain # note");
-  assert.equal(env.SINGLE, 'a b');
-  assert.equal(env.DOUBLE, 'quoted # value');
-  assert.equal(env.BARE, 'plain');
-});
+function toStr(v) {
+  if (typeof v === 'string') return v;
+  if (v === null) return 'null';
+  if (v === undefined) return '';
+  return String(v);
+}
 
-test('validate reports missing required variable', () => {
-  const schema = parseSchema({ vars: { PORT: { type: 'port', required: true } } });
-  const result = validate(schema, {});
-  assert.equal(result.ok, false);
-  assert.equal(result.errors.length, 1);
-  assert.equal(result.errors[0].name, 'PORT');
-  assert.equal(result.errors[0].reason, 'missing');
-});
+function isNumberString(s) {
+  return /^[+-]?(\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(s);
+}
 
-test('validate applies defaults', () => {
-  const schema = parseSchema({ vars: { PORT: { type: 'port', default: 3000 } } });
-  const result = validate(schema, {});
-  assert.equal(result.ok, true);
-  assert.equal(result.resolved.PORT, '3000');
-});
+function isIntegerString(s) {
+  return /^[+-]?\d+$/.test(s);
+}
 
-test('validate rejects invalid types', () => {
-  const schema = parseSchema({
-    vars: {
-      P: { type: 'port', required: true },
-      E: { type: 'email', required: true },
-      U: { type: 'url', required: true },
-      N: { type: 'enum', values: ['a', 'b'], required: true }
+function isValidUrl(s) {
+  try {
+    const u = new URL(s);
+    return Boolean(u.protocol);
+  } catch (e) {
+    return false;
+  }
+}
+
+function isValidEmail(s) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+function validateOne(def, rawValue) {
+  let value = toStr(rawValue);
+  if (def.trim) value = value.trim();
+
+  let ok = true;
+  switch (def.type) {
+    case 'string':
+      break;
+    case 'number':
+      if (!isNumberString(value)) ok = false;
+      break;
+    case 'integer':
+      if (!isIntegerString(value)) ok = false;
+      break;
+    case 'boolean':
+      if (value !== 'true' && value !== 'false') ok = false;
+      break;
+    case 'port':
+      if (!isIntegerString(value)) ok = false;
+      else {
+        const n = Number(value);
+        if (n < 0 || n > 65535) ok = false;
+      }
+      break;
+    case 'url':
+      if (!isValidUrl(value)) ok = false;
+      break;
+    case 'email':
+      if (!isValidEmail(value)) ok = false;
+      break;
+    case 'path':
+      break;
+    case 'enum': {
+      const vals = Array.isArray(def.values) ? def.values.map(String) : [];
+      if (!vals.includes(value)) ok = false;
+      break;
     }
-  });
-  const result = validate(schema, { P: '99999', E: 'nope', U: 'not url', N: 'c' });
-  assert.equal(result.ok, false);
-  assert.equal(result.errors.length, 4);
-});
+    default:
+      ok = false;
+  }
 
-test('validate accepts good values', () => {
-  const schema = parseSchema({ vars: { P: { type: 'port', required: true }, E: { type: 'email', required: true } } });
-  const result = validate(schema, { P: '8080', E: 'a@b.com' });
-  assert.equal(result.ok, true);
-  assert.equal(result.resolved.P, '8080');
-  assert.equal(result.resolved.E, 'a@b.com');
-});
+  if (ok && def.pattern instanceof RegExp) {
+    const re = def.pattern;
+    re.lastIndex = 0;
+    if (!re.test(value)) ok = false;
+  }
 
-test('parseSchema rejects bad input', () => {
-  assert.throws(() => parseSchema({}), /vars/);
-  assert.throws(() => parseSchema({ vars: { X: { type: 'foo' } } }), /unknown type/);
-  assert.throws(() => parseSchema({ vars: { X: { type: 'enum', values: [] } } }), /enum/);
-  assert.throws(() => parseSchema({ vars: { X: { type: 'string', min: 'x' } } }), /min must be/);
-});
+  if (ok && (def.min !== undefined || def.max !== undefined)) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) {
+      ok = false;
+    } else {
+      if (def.min !== undefined && n < def.min) ok = false;
+      if (def.max !== undefined && n > def.max) ok = false;
+    }
+  }
 
-test('validate rejects constraint violations', () => {
-  const schema = parseSchema({ vars: { X: { type: 'string', pattern: '^a+$' }, Y: { type: 'number', min: 5, max: 10 } } });
-  const r = validate(schema, { X: 'bbb', Y: '3' });
-  assert.equal(r.ok, false);
-  assert.equal(r.errors.length, 2);
-});
+  if (ok && (def.minLength !== undefined || def.maxLength !== undefined)) {
+    if (def.minLength !== undefined && value.length < def.minLength) ok = false;
+    if (def.maxLength !== undefined && value.length > def.maxLength) ok = false;
+  }
 
-test('validate RegExp constraints are stateless', () => {
-  const schema = parseSchema({ vars: { X: { type: 'string', pattern: /^a+$/g } } });
-  assert.equal(validate(schema, { X: 'aaa' }).ok, true);
-  assert.equal(validate(schema, { X: 'aaa' }).ok, true);
-});
+  return { ok, value, reason: ok ? '' : 'invalid' };
+}
 
-test('formatExample includes defaults and descriptions', () => {
-  const schema = parseSchema({ vars: { PORT: { type: 'port', default: 3000, description: 'listen port' } } });
-  const out = formatExample(schema);
-  assert.match(out, /PORT=3000/);
-  assert.match(out, /listen port/);
-});
+function parseEnv(input) {
+  if (input == null) return {};
+  const text = String(input).replace(/^\uFEFF/, '');
+  const result = {};
+  for (const rawLine of text.split(/\r?\n/)) {
+    let line = rawLine.trim();
+    if (!line || line.charAt(0) === '#') continue;
+    if (line.startsWith('export ')) line = line.slice(7).trim();
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    if (!key) continue;
+    const rest = line.slice(eq + 1);
+    let value = '';
+    const trimmedRest = rest.trimStart();
+    if (trimmedRest.startsWith('"') || trimmedRest.startsWith("'")) {
+      const quote = trimmedRest.charAt(0);
+      let i = 1;
+      let buf = '';
+      while (i < trimmedRest.length && trimmedRest.charAt(i) !== quote) {
+        buf += trimmedRest.charAt(i);
+        i++;
+      }
+      value = buf;
+    } else {
+      let v = rest.trimStart();
+      let idx = -1;
+      for (let i = 0; i < v.length; i++) {
+        if (v.charAt(i) === '#' && (i === 0 || /\s/.test(v.charAt(i - 1)))) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx !== -1) v = v.slice(0, idx);
+      value = v.trimEnd();
+    }
+    result[key] = value;
+  }
+  return result;
+}
 
-test('formatDocs emits markdown table', () => {
-  const schema = parseSchema({ vars: { PORT: { type: 'port', default: 3000 } } });
-  assert.match(formatDocs(schema), /\| PORT \|/);
-});
+function parseSchema(input) {
+  if (!isPlainObject(input)) throw new Error('schema must be an object');
+  if (!isPlainObject(input.vars)) throw new Error('schema must have a vars object');
 
-test('parseSchema rejects invalid defaults', () => {
-  assert.throws(() => parseSchema({ vars: { X: { type: 'number', default: 'abc' } } }), /invalid default/);
-  assert.throws(() => parseSchema({ vars: { X: { type: 'port', default: 70000 } } }), /invalid default/);
-  assert.throws(() => parseSchema({ vars: { X: { type: 'enum', values: ['a'], default: 'b' } } }), /invalid default/);
-  assert.throws(() => parseSchema({ vars: { X: { type: 'string', minLength: 3, default: 'ab' } } }), /invalid default/);
-});
+  const vars = {};
+  for (const [name, def] of Object.entries(input.vars)) {
+    if (!isPlainObject(def)) throw new Error(`variable ${name} must be an object`);
+    if (typeof def.type !== 'string' || !TYPES.has(def.type)) {
+      throw new Error(`unknown type: ${def.type}`);
+    }
 
-test('parseEnv strips a leading BOM', () => {
-  assert.deepEqual(parseEnv('\uFEFFFOO=bar\nBAZ="qux"'), { FOO: 'bar', BAZ: 'qux' });
-});
+    const norm = { type: def.type };
 
-test('formatExample trims trimmed defaults', () => {
-  const schema = parseSchema({ vars: { X: { type: 'string', trim: true, default: '  hi  ' } } });
-  assert.match(formatExample(schema), /X=hi\n/);
-});
+    if (def.required === undefined) {
+      norm.required = false;
+    } else if (typeof def.required !== 'boolean') {
+      throw new Error('required must be a boolean');
+    } else {
+      norm.required = def.required;
+    }
 
-test('formatDocs trims trimmed defaults', () => {
-  const schema = parseSchema({ vars: { X: { type: 'string', trim: true, default: '  hi  ' } } });
-  assert.match(formatDocs(schema), /\| X \| string \| no \| hi \|/);
-});
+    if (def.description !== undefined) {
+      if (typeof def.description !== 'string') throw new Error('description must be a string');
+      norm.description = def.description;
+    }
 
-test('validate coerces non-string env values to strings', () => {
-  const schema = parseSchema({ vars: { N: { type: 'number', required: true, minLength: 1 }, B: { type: 'boolean', default: false } } });
-  const result = validate(schema, { N: 0 });
-  assert.equal(result.ok, true);
-  assert.equal(result.resolved.N, '0');
-  assert.equal(result.resolved.B, 'false');
-});
+    if (def.values !== undefined) {
+      if (!Array.isArray(def.values)) throw new Error('values must be an array');
+      norm.values = def.values.slice();
+    } else if (def.type === 'enum') {
+      throw new Error('enum requires a non-empty values array');
+    }
+    if (def.type === 'enum') {
+      if (!Array.isArray(norm.values) || norm.values.length === 0) {
+        throw new Error('enum requires a non-empty values array');
+      }
+    }
 
-test('validate treats non-object env input as empty', () => {
-  const schema = parseSchema({ vars: { PORT: { type: 'port', required: true } } });
-  const result = validate(schema, []);
-  assert.equal(result.ok, false);
-  assert.equal(result.errors[0].reason, 'missing');
-});
+    if (def.pattern !== undefined) {
+      if (def.pattern instanceof RegExp) {
+        norm.pattern = new RegExp(def.pattern.source, def.pattern.flags);
+      } else if (typeof def.pattern === 'string') {
+        norm.pattern = new RegExp(def.pattern);
+      } else {
+        throw new Error('pattern must be a string or RegExp');
+      }
+    }
 
-test('parseSchema rejects invalid required, description, and values fields', () => {
-  assert.throws(() => parseSchema({ vars: { X: { type: 'string', required: 'true' } } }), /required must be a boolean/);
-  assert.throws(() => parseSchema({ vars: { X: { type: 'string', description: 123 } } }), /description must be a string/);
-  assert.throws(() => parseSchema({ vars: { X: { type: 'string', values: 'a' } } }), /values must be an array/);
-});
+    if (def.trim === undefined) {
+      norm.trim = false;
+    } else if (typeof def.trim !== 'boolean') {
+      throw new Error('trim must be a boolean');
+    } else {
+      norm.trim = def.trim;
+    }
+
+    if (def.min !== undefined) {
+      if (typeof def.min !== 'number' || !Number.isFinite(def.min)) throw new Error('min must be a number');
+      norm.min = def.min;
+    }
+    if (def.max !== undefined) {
+      if (typeof def.max !== 'number' || !Number.isFinite(def.max)) throw new Error('max must be a number');
+      norm.max = def.max;
+    }
+    if (def.minLength !== undefined) {
+      if (typeof def.minLength !== 'number' || !Number.isFinite(def.minLength)) throw new Error('minLength must be a number');
+      norm.minLength = def.minLength;
+    }
+    if (def.maxLength !== undefined) {
+      if (typeof def.maxLength !== 'number' || !Number.isFinite(def.maxLength)) throw new Error('maxLength must be a number');
+      norm.maxLength = def.maxLength;
+    }
+
+    if (def.default !== undefined) {
+      const r = validateOne(norm, def.default);
+      if (!r.ok) throw new Error('invalid default');
+      norm.default = r.value;
+    }
+
+    vars[name] = norm;
+  }
+
+  return { vars };
+}
+
+function validate(schema, env) {
+  const vars = (schema && isPlainObject(schema.vars)) ? schema.vars : {};
+  let source = env;
+  if (!source || typeof source !== 'object' || Array.isArray(source)) source = {};
+
+  const errors = [];
+  const resolved = {};
+  for (const [name, def] of Object.entries(vars)) {
+    const has = Object.prototype.hasOwnProperty.call(source, name);
+    const raw = has ? source[name] : undefined;
+    if (raw === undefined) {
+      if (def.default !== undefined) {
+        resolved[name] = def.default;
+        continue;
+      }
+      if (def.required) errors.push({ name, reason: 'missing' });
+      continue;
+    }
+    const r = validateOne(def, raw);
+    if (r.ok) resolved[name] = r.value;
+    else errors.push({ name, reason: r.reason || 'invalid' });
+  }
+  return { ok: errors.length === 0, errors, resolved };
+}
+
+function formatExample(schema) {
+  const vars = (schema && isPlainObject(schema.vars)) ? schema.vars : {};
+  const lines = [];
+  for (const [name, def] of Object.entries(vars)) {
+    if (def.description) lines.push(`# ${def.description}`);
+    const val = def.default !== undefined ? def.default : '';
+    lines.push(`${name}=${val}`);
+  }
+  return lines.join('\n') + (lines.length ? '\n' : '');
+}
+
+function formatDocs(schema) {
+  const vars = (schema && isPlainObject(schema.vars)) ? schema.vars : {};
+  const lines = ['| Variable | Type | Required | Default |', '| --- | --- | --- | --- |'];
+  for (const [name, def] of Object.entries(vars)) {
+    const required = def.required ? 'yes' : 'no';
+    const val = def.default !== undefined ? def.default : '';
+    lines.push(`| ${name} | ${def.type} | ${required} | ${val} |`);
+  }
+  return lines.join('\n') + '\n';
+}
+
+module.exports = { parseEnv, parseSchema, validate, formatExample, formatDocs };
