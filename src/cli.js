@@ -5,7 +5,8 @@ const fs = require('fs');
 const { parseEnv, parseSchema, validate, formatExample, formatDocs } = require('./lib');
 
 function parseArgs(argv) {
-  const out = { _: [] };
+  const out = Object.create(null);
+  out._ = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--')) {
@@ -15,9 +16,8 @@ function parseArgs(argv) {
         continue;
       }
       const key = a.slice(2);
-      const next = argv[i + 1];
-      if (next && !next.startsWith('--')) {
-        out[key] = next;
+      if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
+        out[key] = argv[i + 1];
         i++;
       } else {
         out[key] = true;
