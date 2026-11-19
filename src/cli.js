@@ -94,7 +94,8 @@ function main() {
       process.exit(2);
     }
     const result = validate(schema, env);
-    if (args.json) {
+    const json = args.json === true || args.json === 'true' || args.json === '1';
+    if (json) {
       process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       process.exit(result.ok ? 0 : 1);
     }
@@ -111,4 +112,8 @@ function main() {
   process.exit(2);
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = { parseArgs };
