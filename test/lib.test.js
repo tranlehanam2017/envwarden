@@ -112,3 +112,18 @@ test('formatDocs trims trimmed defaults', () => {
   const schema = parseSchema({ vars: { X: { type: 'string', trim: true, default: '  hi  ' } } });
   assert.match(formatDocs(schema), /\| X \| string \| no \| hi \|/);
 });
+
+test('validate coerces non-string env values to strings', () => {
+  const schema = parseSchema({ vars: { N: { type: 'number', required: true, minLength: 1 }, B: { type: 'boolean', default: false } } });
+  const result = validate(schema, { N: 0 });
+  assert.equal(result.ok, true);
+  assert.equal(result.resolved.N, '0');
+  assert.equal(result.resolved.B, 'false');
+});
+
+test('validate treats non-object env input as empty', () => {
+  const schema = parseSchema({ vars: { PORT: { type: 'port', required: true } } });
+  const result = validate(schema, []);
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].reason, 'missing');
+});

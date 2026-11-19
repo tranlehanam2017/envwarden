@@ -177,35 +177,36 @@ function parseSchema(input) {
 }
 
 function checkType(spec, value) {
+  const text = value == null ? '' : String(value);
   switch (spec.type) {
     case 'string':
     case 'path':
       return null;
     case 'number':
-      if (value === '' || value.trim() === '' || !Number.isFinite(Number(value))) return 'not a number';
+      if (text === '' || text.trim() === '' || !Number.isFinite(Number(text))) return 'not a number';
       return null;
     case 'integer':
-      if (!/^-?\d+$/.test(value)) return 'not an integer';
-      if (!Number.isFinite(Number(value))) return 'not an integer';
+      if (!/^-?\d+$/.test(text)) return 'not an integer';
+      if (!Number.isFinite(Number(text))) return 'not an integer';
       return null;
     case 'boolean':
-      if (!/^(true|false|1|0|yes|no)$/i.test(value)) return 'not a boolean';
+      if (!/^(true|false|1|0|yes|no)$/i.test(text)) return 'not a boolean';
       return null;
     case 'port':
-      if (!/^\d+$/.test(value)) return 'not a port';
+      if (!/^\d+$/.test(text)) return 'not a port';
       {
-        const n = Number(value);
+        const n = Number(text);
         if (n < 1 || n > 65535) return 'port out of range';
       }
       return null;
     case 'url':
-      try { new URL(value); } catch (e) { return 'not a URL'; }
+      try { new URL(text); } catch (e) { return 'not a URL'; }
       return null;
     case 'email':
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'not an email';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)) return 'not an email';
       return null;
     case 'enum':
-      if (!spec.values.map((v) => String(v)).includes(String(value))) return `not one of ${spec.values.join(', ')}`;
+      if (!spec.values.map((v) => String(v)).includes(text)) return `not one of ${spec.values.join(', ')}`;
       return null;
     default:
       return null;
@@ -213,6 +214,7 @@ function checkType(spec, value) {
 }
 
 function checkConstraints(spec, value) {
+  const text = value == null ? '' : String(value);
   if (spec.pattern !== undefined && spec.pattern !== null) {
     const flags = spec.pattern instanceof RegExp
       ? spec.pattern.flags.replace(/[gy]/g, '')
@@ -220,10 +222,10 @@ function checkConstraints(spec, value) {
     const re = spec.pattern instanceof RegExp
       ? new RegExp(spec.pattern.source, flags)
       : new RegExp(spec.pattern);
-    if (!re.test(value)) return 'does not match pattern';
+    if (!re.test(text)) return 'does not match pattern';
   }
-  const numeric = Number(value);
-  const isNumeric = value !== '' && Number.isFinite(numeric);
+  const numeric = Number(text);
+  const isNumeric = text !== '' && Number.isFinite(numeric);
   if (spec.min !== undefined && spec.min !== null && isNumeric) {
     if (numeric < spec.min) return `below minimum ${spec.min}`;
   }
@@ -231,10 +233,10 @@ function checkConstraints(spec, value) {
     if (numeric > spec.max) return `above maximum ${spec.max}`;
   }
   if (spec.minLength !== undefined && spec.minLength !== null) {
-    if (value.length < spec.minLength) return `shorter than minimum length ${spec.minLength}`;
+    if (text.length < spec.minLength) return `shorter than minimum length ${spec.minLength}`;
   }
   if (spec.maxLength !== undefined && spec.maxLength !== null) {
-    if (value.length > spec.maxLength) return `longer than maximum length ${spec.maxLength}`;
+    if (text.length > spec.maxLength) return `longer than maximum length ${spec.maxLength}`;
   }
   return null;
 }
@@ -242,11 +244,15 @@ function checkConstraints(spec, value) {
 function validate(schema, env) {
   const errors = [];
   const resolved = Object.create(null);
-  const source = env && typeof env === 'object' ? env : {};
+  const source = env && typeof env === 'object' && !Array.isArray(env) ? env : {};
   for (const [name, spec] of Object.entries(schema.vars)) {
     const present = Object.prototype.hasOwnProperty.call(source, name);
     let value = present ? source[name] : undefined;
     const provided = present && value !== undefined && value !== null;
+
+    if (provided && typeof value !== 'string') {
+      value = String(value);
+    }
 
     if (spec.trim && typeof value === 'string') {
       value = value.trim();
