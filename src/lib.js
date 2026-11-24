@@ -58,10 +58,10 @@ function validateOne(def, rawValue) {
     case 'string':
       break;
     case 'number':
-      if (!isNumberString(value)) ok = false;
+      if (!isNumberString(value) || !Number.isFinite(Number(value))) ok = false;
       break;
     case 'integer':
-      if (!isIntegerString(value)) ok = false;
+      if (!isIntegerString(value) || !Number.isFinite(Number(value))) ok = false;
       break;
     case 'boolean':
       if (value !== 'true' && value !== 'false') ok = false;
@@ -70,7 +70,7 @@ function validateOne(def, rawValue) {
       if (!isIntegerString(value)) ok = false;
       else {
         const n = Number(value);
-        if (n < 0 || n > 65535) ok = false;
+        if (!Number.isFinite(n) || n < 0 || n > 65535) ok = false;
       }
       break;
     case 'url':
@@ -240,6 +240,13 @@ function parseSchema(input) {
     if (def.maxLength !== undefined) {
       if (typeof def.maxLength !== 'number' || !Number.isFinite(def.maxLength)) throw new Error('maxLength must be a number');
       norm.maxLength = def.maxLength;
+    }
+
+    if (norm.min !== undefined && norm.max !== undefined && norm.min > norm.max) {
+      throw new Error('min must not exceed max');
+    }
+    if (norm.minLength !== undefined && norm.maxLength !== undefined && norm.minLength > norm.maxLength) {
+      throw new Error('minLength must not exceed maxLength');
     }
 
     if (def.default !== undefined) {

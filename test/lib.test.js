@@ -127,3 +127,14 @@ test('validate treats non-object env input as empty', () => {
   assert.equal(result.ok, false);
   assert.equal(result.errors[0].reason, 'missing');
 });
+
+test('validate rejects non-finite number strings', () => {
+  const schema = parseSchema({ vars: { N: { type: 'number', required: true } } });
+  const result = validate(schema, { N: '1e400' });
+  assert.equal(result.ok, false);
+});
+
+test('parseSchema rejects inverted ranges', () => {
+  assert.throws(() => parseSchema({ vars: { X: { type: 'number', min: 5, max: 3 } } }), /min must not exceed max/);
+  assert.throws(() => parseSchema({ vars: { X: { type: 'string', minLength: 5, maxLength: 3 } } }), /minLength must not exceed maxLength/);
+});
