@@ -131,7 +131,7 @@ function parseEnv(input) {
   if (input == null) return {};
   const text = String(input).replace(/^\uFEFF/, '');
   const result = {};
-  for (const rawLine of text.split(/\r?\n/)) {
+  for (const rawLine of text.split(/\r\n|\r|\n/)) {
     let line = rawLine.trim();
     if (!line || line.charAt(0) === '#') continue;
     const exportMatch = line.match(/^export\s+/);
@@ -153,16 +153,15 @@ function parseEnv(input) {
       }
       value = buf;
     } else {
-      let v = rest.trimStart();
       let idx = -1;
-      for (let i = 0; i < v.length; i++) {
-        if (v.charAt(i) === '#' && (i === 0 || /\s/.test(v.charAt(i - 1)))) {
+      for (let i = 0; i < rest.length; i++) {
+        if (rest.charAt(i) === '#' && i > 0 && /\s/.test(rest.charAt(i - 1))) {
           idx = i;
           break;
         }
       }
-      if (idx !== -1) v = v.slice(0, idx);
-      value = v.trimEnd();
+      const v = idx === -1 ? rest : rest.slice(0, idx);
+      value = v.trim();
     }
     safeSet(result, key, value);
   }

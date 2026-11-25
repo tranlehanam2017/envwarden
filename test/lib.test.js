@@ -138,3 +138,14 @@ test('parseSchema rejects inverted ranges', () => {
   assert.throws(() => parseSchema({ vars: { X: { type: 'number', min: 5, max: 3 } } }), /min must not exceed max/);
   assert.throws(() => parseSchema({ vars: { X: { type: 'string', minLength: 5, maxLength: 3 } } }), /minLength must not exceed maxLength/);
 });
+
+test('parseEnv handles lone CR line endings', () => {
+  const env = parseEnv('FOO=bar\rBAZ="qux"\r');
+  assert.deepEqual(env, { FOO: 'bar', BAZ: 'qux' });
+});
+
+test('parseEnv preserves hash-prefixed unquoted values', () => {
+  const env = parseEnv('FOO=#bar\nBAZ=value # note');
+  assert.equal(env.FOO, '#bar');
+  assert.equal(env.BAZ, 'value');
+});
