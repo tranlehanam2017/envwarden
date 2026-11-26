@@ -6,24 +6,30 @@ const { parseEnv, parseSchema, validate, formatExample, formatDocs } = require('
 
 function parseArgs(argv) {
   const out = Object.create(null);
-  out._ = [];
+  const positional = [];
+  out._ = positional;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    if (a === '--') {
+      for (let j = i + 1; j < argv.length; j++) positional.push(argv[j]);
+      break;
+    }
     if (a.startsWith('--')) {
       const equals = a.indexOf('=');
       if (equals !== -1) {
-        out[a.slice(2, equals)] = a.slice(equals + 1);
+        const key = a.slice(2, equals);
+        if (key !== '_') out[key] = a.slice(equals + 1);
         continue;
       }
       const key = a.slice(2);
       if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
-        out[key] = argv[i + 1];
+        if (key !== '_') out[key] = argv[i + 1];
         i++;
       } else {
-        out[key] = true;
+        if (key !== '_') out[key] = true;
       }
     } else {
-      out._.push(a);
+      positional.push(a);
     }
   }
   return out;

@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parseEnv, parseSchema, validate, formatExample, formatDocs } = require('../src/lib');
+const { parseArgs } = require('../src/cli');
 
 test('parseEnv handles comments, quotes and blanks', () => {
   const env = parseEnv('FOO=bar\n# comment\nBAZ="qux"\nEMPTY=\n\n  SPACED = value  ');
@@ -148,4 +149,20 @@ test('parseEnv preserves hash-prefixed unquoted values', () => {
   const env = parseEnv('FOO=#bar\nBAZ=value # note');
   assert.equal(env.FOO, '#bar');
   assert.equal(env.BAZ, 'value');
+});
+
+test('parseArgs handles empty option values', () => {
+  const args = parseArgs(['--env', '', '--foo=']);
+  assert.equal(args.env, '');
+  assert.equal(args.foo, '');
+});
+
+test('parseArgs supports the -- terminator', () => {
+  const args = parseArgs(['check', '--', '--schema', 'x']);
+  assert.deepEqual(args._, ['check', '--schema', 'x']);
+});
+
+test('parseArgs protects the positional arguments array', () => {
+  const args = parseArgs(['--_', 'value', 'pos']);
+  assert.deepEqual(args._, ['pos']);
 });
