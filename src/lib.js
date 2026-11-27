@@ -131,40 +131,78 @@ function parseEnv(input) {
   if (input == null) return {};
   const text = String(input).replace(/^\uFEFF/, '');
   const result = {};
-  for (const rawLine of text.split(/\r\n|\r|\n/)) {
-    let line = rawLine.trim();
-    if (!line || line.charAt(0) === '#') continue;
-    const exportMatch = line.match(/^export\s+/);
-    if (exportMatch) line = line.slice(exportMatch[0].length).trim();
-    const eq = line.indexOf('=');
-    if (eq === -1) continue;
-    const key = line.slice(0, eq).trim();
-    if (!key) continue;
-    const rest = line.slice(eq + 1);
+  const n = text.length;
+  let i = 0;
+
+  while (i < n) {
+    while (
+      i < n &&
+      (text[i] === ' ' || text[i] === '\t' || text[i] === '\n' ||
+        text[i] === '\r' || text[i] === '\f' || text[i] === '\v')
+    ) {
+      i++;
+    }
+    if (i >= n) break;
+
+    if (text[i] === '#') {
+      while (i < n && text[i] !== '\n' && text[i] !== '\r') i++;
+      continue;
+    }
+
+    let eq = -1;
+    let j = i;
+    while (j < n && text[j] !== '\n' && text[j] !== '\r') {
+      if (text[j] === '=' && eq === -1) eq = j;
+      j++;
+    }
+    if (eq === -1) {
+      while (i < n && text[i] !== '\n' && text[i] !== '\r') i++;
+      continue;
+    }
+
+    let name = text.slice(i, eq).trim();
+    const exportMatch = name.match(/^export\s+/);
+    if (exportMatch) name = name.slice(exportMatch[0].length).trim();
+
+    let k = eq + 1;
+    while (k < n && (text[k] === ' ' || text[k] === '\t')) k++;
+
+    if (!name) {
+      while (k < n && text[k] !== '\n' && text[k] !== '\r') k++;
+      i = k;
+      continue;
+    }
+
     let value = '';
-    const trimmedRest = rest.trimStart();
-    if (trimmedRest.startsWith('"') || trimmedRest.startsWith("'")) {
-      const quote = trimmedRest.charAt(0);
-      let i = 1;
-      let buf = '';
-      while (i < trimmedRest.length && trimmedRest.charAt(i) !== quote) {
-        buf += trimmedRest.charAt(i);
-        i++;
-      }
-      value = buf;
+    if (k < n && (text[k] === '"' || text[k] === "'")) {
+      const quote = text[k];
+      k++;
+      const start = k;
+      while (k < n && text[k] !== quote) k++;
+      value = text.slice(start, k);
+      if (k < n) k++;
+      while (k < n && text[k] !== '\n' && text[k] !== '\r') k++;
     } else {
-      let idx = -1;
-      for (let i = 0; i < rest.length; i++) {
-        if (rest.charAt(i) === '#' && i > 0 && /\s/.test(rest.charAt(i - 1))) {
-          idx = i;
+      const start = k;
+      let eol = k;
+      while (eol < n && text[eol] !== '\n' && text[eol] !== '\r') eol++;
+      let segment = text.slice(k, eol);
+      let commentIndex = -1;
+      for (let t = 0; t < segment.length; t++) {
+        if (segment[t] === '#' && t > 0 && /\s/.test(segment[t - 1])) {
+          commentIndex = t;
           break;
         }
       }
-      const v = idx === -1 ? rest : rest.slice(0, idx);
-      value = v.trim();
+      if (commentIndex !== -1) segment = segment.slice(0, commentIndex);
+      value = segment.trim();
+      k = eol;
     }
-    safeSet(result, key, value);
+
+    safeSet(result, name, value);
+    i = k;
   }
+
   return result;
 }
 
